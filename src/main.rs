@@ -1,28 +1,15 @@
-use std::fs::File;
-use std::io::prelude::*;
+use env_logger::Logger;
+use log::*;
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use std::collections::HashMap;
-use log::*;
-use env_logger::Logger;
+use std::fs::File;
+use std::io::prelude::*;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
-struct CodeField {
-    pub field_type: String, 
-    pub doc: String,
-}
-
-impl CodeField {
-    fn new() -> CodeField {
-        CodeField {
-            field_type: String::new(),
-            doc: String::new(),
-        }
-    }
-}
+mod field;
 
 #[derive(Eq, PartialEq, Debug)]
 struct CodeStruct {
-    fields: HashMap<String, CodeField>,
+    fields: HashMap<String, field::Field>,
 }
 
 impl CodeStruct {
@@ -48,7 +35,7 @@ impl CodeStruct {
 
 #[derive(Eq, PartialEq, Debug)]
 struct Code {
-    structs: HashMap<String, CodeStruct>
+    structs: HashMap<String, CodeStruct>,
 }
 
 impl Code {
@@ -58,11 +45,11 @@ impl Code {
         }
     }
 
-    fn add_struct_field(&mut self, struct_name: String, field_name: String, field_type:String) {
+    fn add_struct_field(&mut self, struct_name: String, field: &field::Field) {
         let struct_name = struct_name.replace(" ", "");
-        trace!("name: {}", field_name);
+        trace!("name: {:?}", field);
         let s = self.structs.entry(struct_name).or_insert(CodeStruct::new());
-        s.fields.entry(field_name).or_insert(CodeField::new()).field_type = field_type;
+        s.fields.insert(field.name.clone(), field.clone());
     }
 
     fn generate(&self) -> String {
@@ -76,6 +63,27 @@ impl Code {
     }
 }
 
+// fn get_field_name(field: String, add: String) -> (String, Option<String>) {
+//     if let Some(l) = add.find(":") {
+//         let next: String = add.to_string().drain(..l).collect();
+//         (add, Some(format!("{}{}", field, next)))
+//     } else {
+//         (format!("{}{}", field, add), None)
+//     };
+// }
+
+// struct FieldBuilder {
+//     todo: String,
+//     name: Option<String>,
+//     example: Option<String>,
+//     field_type: Option<String>,
+//     doc: Option<String>,
+// }
+
+// impl FieldBuilder {
+//     fn new(todo: String) -> FieldBuilder {}
+// }
+
 fn main() {
     env_logger::init();
     info!("starting up");
@@ -86,17 +94,16 @@ fn main() {
         return;
     }
 
-
     let mut file = File::open(&args[1]).unwrap();
     let mut markdown_input = String::new();
     file.read_to_string(&mut markdown_input).unwrap();
 
     #[derive(Debug, Clone)]
     enum Action {
-        Header,
+        Header(String),
         Fields(String),
-        FieldName(String),
-        FieldType(String, String),
+        FieldAdd(String, field::FieldBuilder),
+        // FieldType(String, String),
         None,
     }
 
@@ -107,33 +114,70 @@ fn main() {
     for event in Parser::new_ext(&markdown_input, o) {
         match (event, action.clone()) {
             (Event::Start(Tag::Header(x)), _) => {
-                action = Action::Header;
+                action = Action::Header(String::new());
             }
+            (Event::End(Tag::Header(_)), Action::Header(_)) => action = Action::None,
             // (Event::End(Tag::Header(_)), _) => action = Action::None,
-            (Event::Text(text), Action::Header) => {
-                if text.ends_with(" Fields") {
-                    debug!("== {} ==", text);
-                    action = Action::Fields(text.trim_end_matches(" Fields").to_string());
+            (Event::Code(code), Action::Header(_)) => {
+                action = Action::Header(code.to_string());
+            }
+            (Event::Text(text), Action::Header(header)) => {
+                if text.ends_with(" (object)") { // Attendee
+                    debug!("== {}{} ==", header, text);
+                    action =
+                        Action::Fields(format!("{}{}", header, text.trim_end_matches(" (object)")));
                 }
             }
-            // (Event::Text(text), Action::Fields(_)) => println!("Text {}", text),
-            // (Event::Start(Tag::Table(_)), _) => println!("Table"),
-            // (Event::Start(Tag::TableHead), _) => println!("Head"),
-            // (Event::End(Tag::TableHead), _) => println!("Head <"),
-            (Event::Start(Tag::TableRow), Action::Fields(class)) => action = Action::FieldName(class),
-            // (Event::Start(Tag::TableCell),_) => println!(" - TableCell"),
-            (Event::Code(field_name), Action::FieldName(class)) => {
-    //            println!(" - {} code:{}", name, code);
-                action = Action::FieldType(class, field_name.to_string());
+            (Event::Start(Tag::Item), Action::Fields(t)) => {
+                action = Action::FieldAdd(t, field::FieldBuilder::new())
             }
-            (Event::Code(field_type), Action::FieldType(class, field_name)) => {
-                debug!(" - {} {} {}", class, field_name, field_type);
-                code.add_struct_field(class.clone(), field_name, field_type.to_string());
-                action = Action::Fields(class);
+            (Event::Code(code), Action::FieldAdd(class, field)) => {
+                let mut field = field.clone();
+                field.add_code(code.to_string());
+                action = Action::FieldAdd(class, field);
             }
+            (Event::Text(code), Action::FieldAdd(class, field)) => {
+                let mut field = field.clone();
+                field.add_text(code.to_string());
+                action = Action::FieldAdd(class, field);
+            }
+            (Event::Start(Tag::List(_)), Action::FieldAdd(class, field)) => {
+                // Don't support enum's or sub types
+                action = Action::Fields(class.clone());
+                debug!("- {:?}", field);
+                if let Some(field) = field.build() {
+                    code.add_struct_field(class.clone(), &mut field.clone());
+                }
+            }
+            (Event::End(Tag::Item), Action::FieldAdd(class, field)) => {
+                action = Action::Fields(class.clone());
+                debug!("- {:?}", field);
+                if let Some(field) = field.build() {
+                    code.add_struct_field(class.clone(), &mut field.clone());
+                }
+            }
+            // (Event::Text(text), Action::Fields(_)) => debug!("{}", text),
+            // (Event::Code(text), Action::Fields(_)) => debug!("{}", text),
+            (a, Action::Fields(_)) => debug!("{:?}", a),
+            //         // (Event::Text(text), Action::Fields(_)) => println!("Text {}", text),
+            //         // (Event::Start(Tag::Table(_)), _) => println!("Table"),
+            //         // (Event::Start(Tag::TableHead), _) => println!("Head"),
+            //         // (Event::End(Tag::TableHead), _) => println!("Head <"),
+            //         (Event::Start(Tag::TableRow), Action::Fields(class)) => action = Action::FieldName(class),
+            //         // (Event::Start(Tag::TableCell),_) => println!(" - TableCell"),
+            //         (Event::Code(field_name), Action::FieldName(class)) => {
+            // //            println!(" - {} code:{}", name, code);
+            //             action = Action::FieldType(class, field_name.to_string());
+            //         }
+            //         (Event::Code(field_type), Action::FieldType(class, field_name)) => {
+            //             debug!(" - {} {} {}", class, field_name, field_type);
+            //             code.add_struct_field(class.clone(), field_name, field_type.to_string());
+            //             action = Action::Fields(class);
+            //         }
             _ => (),
         }
     }
 
+    debug!("code {:?}",code);
     println!("{}", code.generate());
 }
