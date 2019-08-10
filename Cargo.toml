@@ -1,0 +1,11 @@
+[package]
+name = "api-blueprint-to-rust"
+version = "0.1.0"
+authors = ["Johan Govers <johan@otherweb.eu>"]
+edition = "2018"
+
+[dependencies]
+pulldown-cmark = "0.5.3"
+codegen = "*"
+env_logger = "0.6.2"
+log = "0.4.0"
