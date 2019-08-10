@@ -80,17 +80,16 @@ impl FieldBuilder {
     }
 
     pub fn build(&self) -> Option<Field> {
-        if let (Some(name), Some(example), Some(field_type), Some(doc)) = (
+        if let (Some(name), Some(example), Some(field_type)) = (
             self.name.clone(),
             self.example.clone(),
-            self.field_type.clone(),
-            self.doc.clone(),
+            self.field_type.clone()
         ) {
             Some(Field {
                 name,
                 example,
-                field_type,
-                doc,
+                field_type : fix_field_type(field_type),
+                doc: self.doc.clone().unwrap_or_default(),
             })
         } else {
             log::error!("wrong field {:?}", self);
@@ -98,23 +97,116 @@ impl FieldBuilder {
         }
     }
 }
-// id: 12345 (string) - Attendee ID
-// created: `2018-05-12T02:00:00Z` (datetime) - When the attendee was created (order placed)
-// + team (Attendee Team, nullable) - The attendee’s team information
-fn main_test() {
-    let mut t = FieldBuilder::new();
-    t.add_text(String::from("id: 12345 (string) - Attendee ID"));
-    println!("{:?}", t);
-    let mut t = FieldBuilder::new();
-    t.add_text(String::from("created: "));
-    t.add_code(String::from("2018-05-12T02:00:00Z"));
-    t.add_text(String::from(
-        "(datetime) - When the attendee was created (order placed)",
-    ));
-    println!("{:?}", t);
-    let mut t = FieldBuilder::new();
-    t.add_text(String::from(
-        "team (Attendee Team, nullable) - The attendee’s team information",
-    ));
-    println!("{:?}", t);
+
+fn fix_field_type(field_type: String) -> String {
+    let mut is_vec = false;
+    let mut is_optional = false;
+    let mut is_nullable = false;
+    let mut is_enum = false;
+    // let mut is_base_type = false;
+    let mut is_required = false;
+
+    let mut split = field_type.split(",");
+
+    let mut value: String = if let Some(ref mut a) = split.next() {
+        is_vec = a.starts_with("array[");
+        if is_vec {
+            *a = a.trim_start_matches("array[");
+            *a = a.trim_end_matches("]");
+        }
+        is_enum = a.starts_with("enum[");
+        if is_enum {
+            *a = a.trim_start_matches("enum[");
+            *a = a.trim_end_matches("]");
+        }
+        let a = &a.replace(" ", "");
+
+        match a.as_ref() {
+            "string" => "String".to_string(),
+            "boolean" => "boolean".to_string(),
+            "number" => "i64".to_string(),
+            "datetime" => "String".to_string(), // TODO
+            a => a.to_string(),
+        }
+    } else {
+        String::new()
+    };
+
+    while let Some(e) = split.next() {
+        match e.trim() {
+            "optional" => is_optional = true,
+            "nullable" => is_nullable = true,
+            "required" => is_required = true,
+            _ => (),
+        }
+    }
+
+    if is_vec {
+        value = format!("vec<{}>", value);
+    }
+
+    if is_optional || is_nullable {
+        value = format!("Option<{}>", value);
+    }
+
+    value
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // TODO make a real test of it
+    #[test]
+    fn main_test() {
+        let mut t = FieldBuilder::new();
+        t.add_text(String::from("id: 12345 (string) - Attendee ID"));
+        println!("{:?}", t);
+        let mut t = FieldBuilder::new();
+        t.add_text(String::from("created: "));
+        t.add_code(String::from("2018-05-12T02:00:00Z"));
+        t.add_text(String::from(
+            "(datetime) - When the attendee was created (order placed)",
+        ));
+        println!("{:?}", t);
+        let mut t = FieldBuilder::new();
+        t.add_text(String::from(
+            "team (Attendee Team, nullable) - The attendee’s team information",
+        ));
+        println!("{:?}", t);
+        let mut t = FieldBuilder::new();
+        t.add_text(String::from(
+            "event (Event, optional) - Full details of the event (requires the ",
+        ));
+        t.add_code(String::from("event"));
+        t.add_text(String::from("expansion"));
+        println!("{:?}", t);
+
+        let mut t = FieldBuilder::new();
+        t.add_text(String::from("questions (array"));
+        t.add_text(String::from("["));
+        t.add_text(String::from("Question"));
+        t.add_text(String::from("]"));
+        t.add_text(String::from(
+            ", optional) - The per-attendee custom questions",
+        ));
+        println!("{:?}", t);
+    }
+
+    // TODO make a real test of it
+    #[test]
+    fn test_fix_field_type() {
+        println!(
+            "{}",
+            fix_field_type(String::from("Attendee Assigned Unit, optional, nullable"))
+        );
+        println!(
+            "{}",
+            fix_field_type(String::from("array[Answer], optional"))
+        );
+        println!(
+            "{}",
+            fix_field_type(String::from("array[enum[string]], optional"))
+        );
+    }
 }

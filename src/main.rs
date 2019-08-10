@@ -1,4 +1,3 @@
-use env_logger::Logger;
 use log::*;
 use pulldown_cmark::{Event, Options, Parser, Tag};
 use std::collections::HashMap;
@@ -109,11 +108,10 @@ fn main() {
 
     let mut code = Code::new();
 
-    let mut o = Options::all();
     let mut action: Action = Action::None;
-    for event in Parser::new_ext(&markdown_input, o) {
+    for event in Parser::new_ext(&markdown_input,  Options::all()) {
         match (event, action.clone()) {
-            (Event::Start(Tag::Header(x)), _) => {
+            (Event::Start(Tag::Header(_)), _) => {
                 action = Action::Header(String::new());
             }
             (Event::End(Tag::Header(_)), Action::Header(_)) => action = Action::None,
@@ -122,7 +120,8 @@ fn main() {
                 action = Action::Header(code.to_string());
             }
             (Event::Text(text), Action::Header(header)) => {
-                if text.ends_with(" (object)") { // Attendee
+                if text.ends_with(" (object)") {
+                    // Attendee
                     debug!("== {}{} ==", header, text);
                     action =
                         Action::Fields(format!("{}{}", header, text.trim_end_matches(" (object)")));
@@ -156,28 +155,11 @@ fn main() {
                     code.add_struct_field(class.clone(), &mut field.clone());
                 }
             }
-            // (Event::Text(text), Action::Fields(_)) => debug!("{}", text),
-            // (Event::Code(text), Action::Fields(_)) => debug!("{}", text),
             (a, Action::Fields(_)) => debug!("{:?}", a),
-            //         // (Event::Text(text), Action::Fields(_)) => println!("Text {}", text),
-            //         // (Event::Start(Tag::Table(_)), _) => println!("Table"),
-            //         // (Event::Start(Tag::TableHead), _) => println!("Head"),
-            //         // (Event::End(Tag::TableHead), _) => println!("Head <"),
-            //         (Event::Start(Tag::TableRow), Action::Fields(class)) => action = Action::FieldName(class),
-            //         // (Event::Start(Tag::TableCell),_) => println!(" - TableCell"),
-            //         (Event::Code(field_name), Action::FieldName(class)) => {
-            // //            println!(" - {} code:{}", name, code);
-            //             action = Action::FieldType(class, field_name.to_string());
-            //         }
-            //         (Event::Code(field_type), Action::FieldType(class, field_name)) => {
-            //             debug!(" - {} {} {}", class, field_name, field_type);
-            //             code.add_struct_field(class.clone(), field_name, field_type.to_string());
-            //             action = Action::Fields(class);
-            //         }
             _ => (),
         }
     }
 
-    debug!("code {:?}",code);
+    // debug!("code {:?}", code);
     println!("{}", code.generate());
 }
