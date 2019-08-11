@@ -26,8 +26,10 @@ impl CodeStruct {
         s.derive("Debug");
         s.derive("Serialize");
         s.derive("Deserialize");
+        s.vis("pub");
         for (name, field) in &self.fields {
-            s.field(name, &field.field_type);
+            // wait on https://github.com/carllerche/codegen/pull/6/ of pub and anotation
+            s.field(&format!("pub {}", name), &field.field_type);
         }
         s
     }
@@ -81,7 +83,6 @@ impl ApibToRs {
             Fields(String),
             FieldAdd(String, field::FieldBuilder),
             SkipList(String, u32),
-            // FieldType(String, String),
             None,
         }
 
