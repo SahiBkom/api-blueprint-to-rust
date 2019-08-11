@@ -30,7 +30,13 @@ impl FieldBuilder {
 
     pub fn add_code(&mut self, code: String) {
         self.todo = format!("{}{}", self.todo, code);
-        trace!("add_code {:?} {:?} {:?} {:?}", code, self.todo, self.name, self. example);
+        trace!(
+            "add_code {:?} {:?} {:?} {:?}",
+            code,
+            self.todo,
+            self.name,
+            self.example
+        );
     }
 
     pub fn add_text(&mut self, text: String) {
@@ -42,7 +48,13 @@ impl FieldBuilder {
                 text.drain(..1); // remove :
                 self.todo = String::new();
             }
-            trace!("add_text A {:?} {:?} {:?} {:?}", text, self.todo, self.name, self. example);
+            trace!(
+                "add_text A {:?} {:?} {:?} {:?}",
+                text,
+                self.todo,
+                self.name,
+                self.example
+            );
         }
         if self.name.is_none() || self.example.is_none() {
             if let Some(pos) = text.find("(") {
@@ -56,7 +68,13 @@ impl FieldBuilder {
                 text.drain(..1); // remove (
                 self.todo = String::new();
             }
-            trace!("add_text B {:?} {:?} {:?} {:?}", text, self.todo, self.name, self. example);
+            trace!(
+                "add_text B {:?} {:?} {:?} {:?}",
+                text,
+                self.todo,
+                self.name,
+                self.example
+            );
         }
         if self.example.is_some() && self.field_type.is_none() {
             if let Some(pos) = text.find(")") {
@@ -64,7 +82,13 @@ impl FieldBuilder {
                 self.field_type = Some(format!("{}{}", self.todo, add));
                 self.todo = String::new();
             }
-            trace!("add_text C {:?} {:?} {:?} {:?}", text, self.todo, self.name, self. example);
+            trace!(
+                "add_text C {:?} {:?} {:?} {:?}",
+                text,
+                self.todo,
+                self.name,
+                self.example
+            );
         }
         if self.field_type.is_some() {
             if let Some(ref mut doc) = self.doc {
@@ -85,12 +109,12 @@ impl FieldBuilder {
         if let (Some(name), Some(example), Some(field_type)) = (
             self.name.clone(),
             self.example.clone(),
-            self.field_type.clone()
+            self.field_type.clone(),
         ) {
             std::dbg!(Some(Field {
-                name : fix_field_name(name),
+                name: fix_field_name(name),
                 example,
-                field_type : fix_field_type(field_type),
+                field_type: fix_field_type(field_type),
                 doc: self.doc.clone().unwrap_or_default(),
             }))
         } else {
@@ -100,12 +124,12 @@ impl FieldBuilder {
     }
 }
 
-fn fix_field_name(field_name: String ) -> String {
+fn fix_field_name(field_name: String) -> String {
     match field_name.trim().as_ref() {
         "type" => "r#type".to_string(),
         name => name.replace("-", "_"),
     }
-} 
+}
 
 fn fix_field_type(field_type: String) -> String {
     let mut is_vec = false;
@@ -132,9 +156,9 @@ fn fix_field_type(field_type: String) -> String {
 
         match a.as_ref() {
             "string" => "String".to_string(),
-            "enum" => "String".to_string(), // TODO
+            "enum" => "String".to_string(),   // TODO
             "object" => "String".to_string(), // TODO
-            "array" => "String".to_string(), // TODO
+            "array" => "String".to_string(),  // TODO
             "boolean" => "bool".to_string(),
             "number" => "i64".to_string(),
             "datetime" => "String".to_string(), // TODO
@@ -168,10 +192,13 @@ fn fix_field_type(field_type: String) -> String {
 mod tests {
     use super::*;
 
-   #[test]
+    #[test]
     fn test_fix_field_name() {
         assert_eq!("r#type".to_string(), fix_field_name("type".to_string()));
-        assert_eq!("datetime_tz_utc,".to_string(), fix_field_name("datetime-tz-utc,".to_string()));
+        assert_eq!(
+            "datetime_tz_utc,".to_string(),
+            fix_field_name("datetime-tz-utc,".to_string())
+        );
     }
 
     // TODO make a real test of it

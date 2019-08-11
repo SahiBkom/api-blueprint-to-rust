@@ -1,5 +1,5 @@
 [package]
-name = "api-blueprint-to-rust"
+name = "api_blueprint_to_rust"
 version = "0.1.0"
 authors = ["Johan Govers <johan@otherweb.eu>"]
 edition = "2018"
@@ -9,3 +9,4 @@ pulldown-cmark = "0.5.3"
 codegen = "*"
 env_logger = "0.6.2"
 log = "0.4.0"
+failure = "0.1.5"
