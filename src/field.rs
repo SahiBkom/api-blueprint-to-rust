@@ -154,15 +154,19 @@ fn fix_field_type(field_type: String) -> String {
         }
         let a = &a.replace(" ", "").replace("-", "_");
 
-        match a.as_ref() {
-            "string" => "String".to_string(),
-            "enum" => "String".to_string(),   // TODO
-            "object" => "String".to_string(), // TODO
-            "array" => "String".to_string(),  // TODO
-            "boolean" => "bool".to_string(),
-            "number" => "i64".to_string(),
-            "datetime" => "String".to_string(), // TODO
-            a => a.to_string(),
+        if a.is_empty() {
+            "String".to_string() // TODO, spec? + `subquestion_ids` (array[])
+        } else {
+            match a.as_ref() {
+                "string" => "String".to_string(),
+                "enum" => "String".to_string(),   // TODO
+                "object" => "String".to_string(), // TODO
+                "array" => "String".to_string(),  // TODO
+                "boolean" => "bool".to_string(),
+                "number" => "i64".to_string(),
+                "datetime" => "String".to_string(), // TODO
+                a => a.to_string(),
+            }
         }
     } else {
         String::new()
