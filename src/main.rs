@@ -1,6 +1,6 @@
 use log::*;
 use pulldown_cmark::{Event, Options, Parser, Tag};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -8,13 +8,13 @@ mod field;
 
 #[derive(Eq, PartialEq, Debug)]
 struct CodeStruct {
-    fields: HashMap<String, field::Field>,
+    fields: BTreeMap<String, field::Field>,
 }
 
 impl CodeStruct {
     fn new() -> CodeStruct {
         CodeStruct {
-            fields: HashMap::new(),
+            fields: BTreeMap::new(),
         }
     }
 
@@ -26,7 +26,7 @@ impl CodeStruct {
         s.derive("Serialize");
         s.derive("Deserialize");
         for (name, field) in &self.fields {
-            s.field(&name, &field.field_type);
+            s.field(name, &field.field_type);
         }
         s
     }
@@ -34,18 +34,18 @@ impl CodeStruct {
 
 #[derive(Eq, PartialEq, Debug)]
 struct Code {
-    structs: HashMap<String, CodeStruct>,
+    structs: BTreeMap<String, CodeStruct>,
 }
 
 impl Code {
     fn new() -> Code {
         Code {
-            structs: HashMap::new(),
+            structs: BTreeMap::new(),
         }
     }
 
     fn add_struct_field(&mut self, struct_name: String, field: &field::Field) {
-        let struct_name = struct_name.replace(" ", "");
+        let struct_name = struct_name.replace(" ", "").replace("-", "_");
         trace!("name: {:?}", field);
         let s = self.structs.entry(struct_name).or_insert(CodeStruct::new());
         s.fields.insert(field.name.clone(), field.clone());
@@ -61,27 +61,6 @@ impl Code {
         cg.to_string()
     }
 }
-
-// fn get_field_name(field: String, add: String) -> (String, Option<String>) {
-//     if let Some(l) = add.find(":") {
-//         let next: String = add.to_string().drain(..l).collect();
-//         (add, Some(format!("{}{}", field, next)))
-//     } else {
-//         (format!("{}{}", field, add), None)
-//     };
-// }
-
-// struct FieldBuilder {
-//     todo: String,
-//     name: Option<String>,
-//     example: Option<String>,
-//     field_type: Option<String>,
-//     doc: Option<String>,
-// }
-
-// impl FieldBuilder {
-//     fn new(todo: String) -> FieldBuilder {}
-// }
 
 fn main() {
     env_logger::init();
@@ -102,6 +81,7 @@ fn main() {
         Header(String),
         Fields(String),
         FieldAdd(String, field::FieldBuilder),
+        SkipList(String, u32),
         // FieldType(String, String),
         None,
     }
@@ -142,10 +122,20 @@ fn main() {
             }
             (Event::Start(Tag::List(_)), Action::FieldAdd(class, field)) => {
                 // Don't support enum's or sub types
-                action = Action::Fields(class.clone());
+                action =  Action::SkipList(class.clone(), 1);
                 debug!("- {:?}", field);
                 if let Some(field) = field.build() {
                     code.add_struct_field(class.clone(), &mut field.clone());
+                }
+            }
+            (Event::Start(Tag::List(_)), Action::SkipList(class, cnt)) => {
+                action =  Action::SkipList(class.clone(), cnt + 1)
+            }
+            (Event::End(Tag::List(_)), Action::SkipList(class, cnt)) => {
+                if cnt == 1 {
+                    action = Action::Fields(class.clone());
+                } else {
+                    action = Action::SkipList(class.clone(), cnt - 1);
                 }
             }
             (Event::End(Tag::Item), Action::FieldAdd(class, field)) => {
